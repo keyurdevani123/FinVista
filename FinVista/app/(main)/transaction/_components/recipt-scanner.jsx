@@ -1,20 +1,13 @@
 "use client";
 
-import { useRef, useEffect } from "react";
+import { useRef, useState } from "react";
 import { Camera, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
-import useFetch from "@/hooks/use-fetch";
-import { scanReceipt } from "@/actions/transaction";
 
 export function ReceiptScanner({ onScanComplete }) {
   const fileInputRef = useRef(null);
-
-  const {
-    loading: scanReceiptLoading,
-    fn: scanReceiptFn,
-    data: scannedData,
-  } = useFetch(scanReceipt);
+  const [scanReceiptLoading, setScanReceiptLoading] = useState(false);
 
   const handleReceiptScan = async (file) => {
     if (file.size > 5 * 1024 * 1024) {
@@ -22,19 +15,32 @@ export function ReceiptScanner({ onScanComplete }) {
       return;
     }
 
-    await scanReceiptFn(file);
-  };
+    setScanReceiptLoading(true);
 
-  useEffect(() => {
-    if (scannedData && !scanReceiptLoading) {
-      if (scannedData.success) {
-        onScanComplete(scannedData.data);
-      } else if (scannedData.error) {
-        toast.error(scannedData.error);
+    try {
+      const formData = new FormData();
+      formData.append("file", file);
+
+      const response = await fetch("/api/scan-receipt", {
+        method: "POST",
+        body: formData,
+      });
+
+      const result = await response.json();
+
+      if (!response.ok || !result?.success) {
+        toast.error(result?.error || "Failed to scan receipt");
+        return;
       }
+
+      onScanComplete(result.data);
+      toast.success("Receipt scanned successfully");
+    } catch (error) {
+      toast.error(error?.message || "Failed to scan receipt");
+    } finally {
+      setScanReceiptLoading(false);
     }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [scanReceiptLoading, scannedData]);
+  };
 
   return (
     <div className="flex items-center gap-4">

@@ -15,6 +15,17 @@ const useFetch = (cb) => {
       setData(response);
       setError(null);
     } catch (error) {
+      const isStaleServerActionError =
+        typeof error?.message === "string" &&
+        (error.message.includes("Failed to find Server Action") ||
+          error.message.includes("was not found on the server"));
+
+      if (isStaleServerActionError && typeof window !== "undefined") {
+        toast.error("App was updated. Reloading to sync actions...");
+        window.location.reload();
+        return;
+      }
+
       setError(error);
       toast.error(error.message);
     } finally {
