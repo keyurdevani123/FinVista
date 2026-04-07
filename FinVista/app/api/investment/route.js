@@ -3,6 +3,13 @@ import { db } from "@/lib/prisma";
 import { auth } from "@clerk/nextjs/server";
 import { revalidatePath } from "next/cache";
 
+function isMissingTickerColumnError(error) {
+  return (
+    error?.code === "P2022" &&
+    String(error?.meta?.column || "").includes("investment_stock.ticker")
+  );
+}
+
 export async function POST(req) {
   const { userId } = await auth();
   if (!userId)
@@ -74,6 +81,11 @@ export async function POST(req) {
         companyName: name,
         investment: { userId: user.id },
       },
+      select: {
+        id: true,
+        quantity: true,
+        buyPrice: true,
+      },
     });
 
     if (existingStock) {
@@ -82,14 +94,32 @@ export async function POST(req) {
       const newQty = prevQty + quantity;
       const avgPrice = (prevPrice * prevQty + buyPrice * quantity) / newQty;
 
-      await db.investmentStock.update({
-        where: { id: existingStock.id },
-        data: {
-          quantity: newQty,
-          buyPrice: avgPrice,
-          ticker: ticker ?? existingStock.ticker,
-        },
-      });
+      const stockUpdateData = {
+        quantity: newQty,
+        buyPrice: avgPrice,
+        ...(ticker ? { ticker } : {}),
+      };
+
+      try {
+        await db.investmentStock.update({
+          where: { id: existingStock.id },
+          data: stockUpdateData,
+          select: { id: true },
+        });
+      } catch (error) {
+        if (!(ticker && isMissingTickerColumnError(error))) {
+          throw error;
+        }
+
+        await db.investmentStock.update({
+          where: { id: existingStock.id },
+          data: {
+            quantity: newQty,
+            buyPrice: avgPrice,
+          },
+          select: { id: true },
+        });
+      }
 
       // Update the base investment amount (total cost basis)
       await db.investment.update({
@@ -97,24 +127,50 @@ export async function POST(req) {
         data: { amount: avgPrice * newQty },
       });
     } else {
-      await db.investment.create({
-        data: {
-          userId: user.id,
-          type,
-          amount: totalCost,
-          stock: {
-            create: {
-              companyName: name,
-              ticker,
-              quantity,
-              buyPrice,
-              purchaseDate: extra.purchaseDate
-                ? new Date(extra.purchaseDate)
-                : new Date(),
+      const stockCreateData = {
+        companyName: name,
+        quantity,
+        buyPrice,
+        purchaseDate: extra.purchaseDate
+          ? new Date(extra.purchaseDate)
+          : new Date(),
+        ...(ticker ? { ticker } : {}),
+      };
+
+      try {
+        await db.investment.create({
+          data: {
+            userId: user.id,
+            type,
+            amount: totalCost,
+            stock: {
+              create: stockCreateData,
             },
           },
-        },
-      });
+        });
+      } catch (error) {
+        if (!(ticker && isMissingTickerColumnError(error))) {
+          throw error;
+        }
+
+        await db.investment.create({
+          data: {
+            userId: user.id,
+            type,
+            amount: totalCost,
+            stock: {
+              create: {
+                companyName: name,
+                quantity,
+                buyPrice,
+                purchaseDate: extra.purchaseDate
+                  ? new Date(extra.purchaseDate)
+                  : new Date(),
+              },
+            },
+          },
+        });
+      }
     }
   } else if (type === "SIP") {
     await db.investment.create({

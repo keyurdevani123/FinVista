@@ -4,6 +4,13 @@ import { db } from "@/lib/prisma";
 import { auth } from "@clerk/nextjs/server";
 import { revalidatePath } from "next/cache";
 
+function isMissingTickerColumnError(error) {
+  return (
+    error?.code === "P2022" &&
+    String(error?.meta?.column || "").includes("investment_stock.ticker")
+  );
+}
+
 export async function getUserInvestments() {
   const { userId } = await auth();
   if (!userId) throw new Error("Unauthorized");
@@ -13,16 +20,43 @@ export async function getUserInvestments() {
   });
   if (!user) throw new Error("User not found");
 
-  const investments = await db.investment.findMany({
-    where: { userId: user.id },
-    include: {
-      fd: true,
-      stock: true,
-      sip: true,
-      mutualFund: true,
-    },
-    orderBy: { createdAt: "desc" },
-  });
+  let investments;
+
+  try {
+    investments = await db.investment.findMany({
+      where: { userId: user.id },
+      include: {
+        fd: true,
+        stock: true,
+        sip: true,
+        mutualFund: true,
+      },
+      orderBy: { createdAt: "desc" },
+    });
+  } catch (error) {
+    if (!isMissingTickerColumnError(error)) {
+      throw error;
+    }
+
+    investments = await db.investment.findMany({
+      where: { userId: user.id },
+      include: {
+        fd: true,
+        stock: {
+          select: {
+            id: true,
+            companyName: true,
+            buyPrice: true,
+            quantity: true,
+            purchaseDate: true,
+          },
+        },
+        sip: true,
+        mutualFund: true,
+      },
+      orderBy: { createdAt: "desc" },
+    });
+  }
 
   return investments.map((inv) => {
     // Only include flat scalars — never spread Prisma relation objects

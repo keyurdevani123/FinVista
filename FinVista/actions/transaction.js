@@ -230,6 +230,13 @@ export async function getUserTransactions(query = {}) {
 // Scan Receipt
 export async function scanReceipt(file) {
   try {
+    if (!process.env.GEMINI_API_KEY) {
+      return {
+        success: false,
+        error: "Gemini API key is missing. Set GEMINI_API_KEY in Vercel.",
+      };
+    }
+
     const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash" });
 
     // Convert File to ArrayBuffer
@@ -274,19 +281,31 @@ export async function scanReceipt(file) {
     try {
       const data = JSON.parse(cleanedText);
       return {
-        amount: parseFloat(data.amount),
-        date: new Date(data.date),
-        description: data.description,
-        category: data.category,
-        merchantName: data.merchantName,
+        success: true,
+        data: {
+          amount: parseFloat(data.amount),
+          date: new Date(data.date),
+          description: data.description,
+          category: data.category,
+          merchantName: data.merchantName,
+        },
       };
     } catch (parseError) {
       console.error("Error parsing JSON response:", parseError);
-      throw new Error("Invalid response format from Gemini");
+      return {
+        success: false,
+        error: "Invalid response format from Gemini",
+      };
     }
   } catch (error) {
     console.error("Error scanning receipt:", error);
-    throw new Error("Failed to scan receipt");
+    return {
+      success: false,
+      error:
+        error?.message?.includes("API key")
+          ? "Gemini API key is invalid. Update GEMINI_API_KEY in Vercel."
+          : "Failed to scan receipt",
+    };
   }
 }
 

@@ -27,8 +27,11 @@ export function ReceiptScanner({ onScanComplete }) {
 
   useEffect(() => {
     if (scannedData && !scanReceiptLoading) {
-      onScanComplete(scannedData);
-      toast.success("Receipt scanned successfully");
+      if (scannedData.success) {
+        onScanComplete(scannedData.data);
+      } else if (scannedData.error) {
+        toast.error(scannedData.error);
+      }
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [scanReceiptLoading, scannedData]);
