@@ -16,6 +16,9 @@ export function StockCard({ stocks, refreshInvestments }) {
   const [selectedIds, setSelectedIds] = useState([]);
 
   const visibleStocks = stocks.filter(stock => stock.companyName?.trim() !== "");
+  const tickerSymbols = visibleStocks
+    .map((stock) => String(stock.ticker || "").trim().toUpperCase())
+    .filter(Boolean);
 
   // Calculate totals using quantity and prices
   const subtotal = visibleStocks.reduce(
@@ -24,7 +27,8 @@ export function StockCard({ stocks, refreshInvestments }) {
   );
   const totalCurrent = visibleStocks.reduce(
     (sum, s) => {
-      const currentPrice = prices?.[s.ticker || s.companyName];
+      const ticker = String(s.ticker || "").trim().toUpperCase();
+      const currentPrice = ticker ? prices?.[ticker] : null;
       return sum + (currentPrice ? Number(currentPrice) * Number(s.quantity || 0) : 0);
     },
     0
@@ -34,7 +38,7 @@ export function StockCard({ stocks, refreshInvestments }) {
   useEffect(() => {
     async function fetchPrices() {
       setLoadingPrices(true);
-      const symbols = visibleStocks.map((stock) => stock.ticker || stock.companyName);
+      const symbols = [...new Set(tickerSymbols)];
       if (symbols.length === 0) {
         setPrices({});
         setLoadingPrices(false);
@@ -51,7 +55,7 @@ export function StockCard({ stocks, refreshInvestments }) {
     }
     fetchPrices();
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [stocks]);
+  }, [tickerSymbols.join(",")]);
 
   const handleSelect = (id) => {
     setSelectedIds((prev) =>
@@ -133,7 +137,8 @@ export function StockCard({ stocks, refreshInvestments }) {
             <div className="text-muted-foreground text-sm">No stock investments yet.</div>
           ) : (
             visibleStocks.map((stock) => {
-              const currentPrice = prices?.[stock.ticker || stock.companyName];
+              const ticker = String(stock.ticker || "").trim().toUpperCase();
+              const currentPrice = ticker ? prices?.[ticker] : null;
               const invested = Number(stock.buyPrice) * Number(stock.quantity);
               const currentVal = currentPrice ? Number(currentPrice) * Number(stock.quantity) : null;
               const pnl = currentVal !== null ? currentVal - invested : null;

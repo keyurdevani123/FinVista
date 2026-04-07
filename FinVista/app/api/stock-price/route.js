@@ -12,6 +12,19 @@ function setCache(ticker, price) {
   priceCache.set(ticker, { price, expiresAt: Date.now() + CACHE_TTL_MS });
 }
 
+function buildTickerCandidates(raw) {
+  const base = String(raw || "").trim().toUpperCase();
+  if (!base) return [];
+
+  // If user already provided exchange suffix (e.g. RELIANCE.NS or TSLA), keep it first.
+  if (base.includes(".")) {
+    return [base];
+  }
+
+  // Try plain first, then NSE and BSE suffixes.
+  return [base, `${base}.NS`, `${base}.BO`];
+}
+
 // Fetch live price directly from Yahoo Finance Chart API.
 // Uses query2 chart endpoint which is more reliable than the quote endpoint.
 async function fetchQuote(ticker) {
@@ -73,21 +86,25 @@ export async function POST(req) {
     const raw = symbols[i];
     if (!raw) continue;
 
-    // Normalise to NSE ticker format: append .NS if not already present
-    const ticker = raw.toUpperCase().endsWith(".NS")
-      ? raw.toUpperCase()
-      : `${raw.toUpperCase()}.NS`;
+    const candidates = buildTickerCandidates(raw);
+    let resolvedPrice = null;
 
-    // Serve from cache if still fresh
-    const cached = getCached(ticker);
-    if (cached !== undefined) {
-      prices[raw] = cached;
-      continue;
+    for (const ticker of candidates) {
+      const cached = getCached(ticker);
+      if (cached !== undefined) {
+        resolvedPrice = cached;
+        break;
+      }
+
+      const fetched = await fetchQuote(ticker);
+      if (fetched !== null) {
+        resolvedPrice = fetched;
+        setCache(ticker, fetched);
+        break;
+      }
     }
 
-    const price = await fetchQuote(ticker);
-    prices[raw] = price;
-    if (price !== null) setCache(ticker, price);
+    prices[raw] = resolvedPrice;
 
     // 150 ms gap between requests
     if (i < symbols.length - 1) {

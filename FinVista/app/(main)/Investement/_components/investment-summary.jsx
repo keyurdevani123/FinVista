@@ -14,12 +14,14 @@ export function InvestmentSummary({ investments }) {
   );
 
   // Fetch stock prices
-  const symbolsKey = stocks.map((s) => s.ticker || s.companyName).join(",");
+  const symbols = stocks
+    .map((s) => String(s.ticker || "").trim().toUpperCase())
+    .filter(Boolean);
+  const symbolsKey = symbols.join(",");
 
   useEffect(() => {
     async function fetchPrices() {
       setLoadingPrices(true);
-      const symbols = stocks.map((stock) => stock.ticker || stock.companyName);
       if (symbols.length === 0) {
         setStockPrices({});
         setLoadingPrices(false);
@@ -48,7 +50,8 @@ export function InvestmentSummary({ investments }) {
   );
 
   const totalStockPnL = stocks.reduce((sum, stock) => {
-    const price = stockPrices?.[stock.ticker || stock.companyName];
+    const ticker = String(stock.ticker || "").trim().toUpperCase();
+    const price = ticker ? stockPrices?.[ticker] : null;
     if (!price) return sum;
     return (
       sum +

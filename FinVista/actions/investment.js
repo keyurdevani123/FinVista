@@ -5,9 +5,16 @@ import { auth } from "@clerk/nextjs/server";
 import { revalidatePath } from "next/cache";
 
 function isMissingTickerColumnError(error) {
+  if (error?.code !== "P2022") return false;
+
+  const column = String(error?.meta?.column || "").toLowerCase();
+  const message = String(error?.message || "").toLowerCase();
+
   return (
-    error?.code === "P2022" &&
-    String(error?.meta?.column || "").includes("investment_stock.ticker")
+    column.includes("ticker") ||
+    column.includes("investment_stock.ticker") ||
+    message.includes("investment_stock.ticker") ||
+    (message.includes("column") && message.includes("ticker"))
   );
 }
 
