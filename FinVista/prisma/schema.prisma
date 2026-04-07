@@ -1,0 +1,177 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+model User {
+  id           String        @id @default(uuid())
+  clerkUserId  String        @unique
+  email        String        @unique
+  name         String?
+  imageUrl     String?
+  transactions Transaction[]
+  accounts     Account[]
+  budgets      Budget[]
+  investments  Investment[]
+  createdAt    DateTime      @default(now())
+  updatedAt    DateTime      @updatedAt
+
+  @@map("users")
+}
+
+model Account {
+  id           String        @id @default(uuid())
+  name         String
+  type         AccountType
+  balance      Decimal       @default(0)
+  isDefault    Boolean       @default(false)
+  userId       String
+  user         User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  transactions Transaction[]
+  createdAt    DateTime      @default(now())
+  updatedAt    DateTime      @updatedAt
+
+  @@index([userId])
+  @@map("accounts")
+}
+
+model Transaction {
+  id                String             @id @default(uuid())
+  type              TransactionType
+  amount            Decimal
+  description       String?
+  date              DateTime
+  category          String
+  receiptUrl        String?
+  isRecurring       Boolean            @default(false)
+  recurringInterval RecurringInterval?
+  nextRecurringDate DateTime?
+  lastProcessed     DateTime?
+  status            TransactionStatus  @default(COMPLETED)
+  userId            String
+  user              User               @relation(fields: [userId], references: [id], onDelete: Cascade)
+  accountId         String
+  account           Account            @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  createdAt         DateTime           @default(now())
+  updatedAt         DateTime           @updatedAt
+
+  @@index([userId])
+  @@index([accountId])
+  @@map("transactions")
+}
+
+model Budget {
+  id            String    @id @default(uuid())
+  amount        Decimal
+  lastAlertSent DateTime?
+  userId        String    @unique
+  user          User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  @@index([userId])
+  @@map("budgets")
+}
+
+// Base investment record — amount = principal invested (Decimal for precision)
+model Investment {
+  id        String         @id @default(uuid())
+  userId    String
+  user      User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  type      InvestmentType
+  amount    Decimal        @default(0)
+  createdAt DateTime       @default(now())
+  updatedAt DateTime       @updatedAt
+
+  fd         InvestmentFD?
+  sip        InvestmentSIP?
+  mutualFund InvestmentMutualFund?
+  stock      InvestmentStock?
+
+  @@index([userId])
+  @@map("investments")
+}
+
+// Fixed Deposit — amount comes from base Investment.amount (principal)
+model InvestmentFD {
+  id            String     @id
+  investment    Investment @relation(fields: [id], references: [id], onDelete: Cascade)
+  fdName        String
+  startDate     DateTime
+  endDate       DateTime
+  interestRate  Float
+  maturityValue Decimal
+
+  @@map("investment_fd")
+}
+
+// SIP — amount comes from base Investment.amount (monthly installment entered by user)
+model InvestmentSIP {
+  id         String     @id
+  investment Investment @relation(fields: [id], references: [id], onDelete: Cascade)
+  fundName   String
+  startDate  DateTime
+  isActive   Boolean    @default(true)
+
+  @@map("investment_sip")
+}
+
+// Mutual Fund — amount comes from base Investment.amount (lump sum)
+model InvestmentMutualFund {
+  id             String     @id
+  investment     Investment @relation(fields: [id], references: [id], onDelete: Cascade)
+  fundName       String
+  investmentDate DateTime
+
+  @@map("investment_mutual_fund")
+}
+
+// Stock — amount in base = total cost basis (buyPrice × quantity)
+// ticker = NSE symbol (e.g. "RELIANCE"). Falls back to companyName for price lookup.
+model InvestmentStock {
+  id           String     @id
+  investment   Investment @relation(fields: [id], references: [id], onDelete: Cascade)
+  companyName  String
+  ticker       String?
+  buyPrice     Decimal
+  quantity     Float
+  purchaseDate DateTime
+
+  @@map("investment_stock")
+}
+
+enum TransactionType {
+  INCOME
+  EXPENSE
+}
+
+enum AccountType {
+  CURRENT
+  SAVINGS
+}
+
+enum TransactionStatus {
+  PENDING
+  COMPLETED
+  FAILED
+}
+
+enum RecurringInterval {
+  DAILY
+  WEEKLY
+  MONTHLY
+  YEARLY
+}
+
+enum InvestmentType {
+  FD
+  SIP
+  MUTUAL_FUNDS
+  STOCKS
+  CRYPTO
+}
