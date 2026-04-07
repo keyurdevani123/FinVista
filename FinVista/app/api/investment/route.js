@@ -50,6 +50,21 @@ export async function POST(req) {
   } else if (type === "STOCKS") {
     const quantity = extra.quantity ? Number(extra.quantity) : 0;
     const buyPrice = parsedAmount; // amount field = buy price per share
+
+    if (!Number.isFinite(quantity) || quantity <= 0) {
+      return NextResponse.json(
+        { error: "Quantity must be greater than 0" },
+        { status: 400 }
+      );
+    }
+
+    if (!Number.isFinite(buyPrice) || buyPrice <= 0) {
+      return NextResponse.json(
+        { error: "Buy price must be greater than 0" },
+        { status: 400 }
+      );
+    }
+
     const totalCost = buyPrice * quantity;
     const ticker = extra.ticker?.trim() || null;
 
