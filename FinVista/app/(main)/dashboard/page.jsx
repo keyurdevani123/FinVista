@@ -15,7 +15,10 @@ export default async function DashboardPage() {
     getDashboardData(),
   ]);
 
-  const defaultAccount = accounts?.find((acc) => acc.isDefault);
+  const safeAccounts = Array.isArray(accounts) ? accounts : [];
+  const safeTransactions = Array.isArray(transactions) ? transactions : [];
+
+  const defaultAccount = safeAccounts.find((acc) => acc.isDefault);
   const budgetData = defaultAccount
     ? await getCurrentBudget(defaultAccount.id)
     : null;
@@ -30,8 +33,8 @@ export default async function DashboardPage() {
 
       {/* Transaction Overview */}
       <DashboardOverview
-        accounts={accounts}
-        transactions={transactions || []}
+        accounts={safeAccounts}
+        transactions={safeTransactions}
       />
 
       {/* Accounts Grid */}
@@ -47,7 +50,7 @@ export default async function DashboardPage() {
         </CreateAccountDrawer>
 
         {/* Render User Accounts */}
-        {accounts.map((account) => (
+        {safeAccounts.map((account) => (
           <AccountCard key={account.id} account={account} />
         ))}
       </div>
